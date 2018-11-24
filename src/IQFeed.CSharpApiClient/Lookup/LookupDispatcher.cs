@@ -9,9 +9,13 @@ namespace IQFeed.CSharpApiClient.Lookup
 {
     public class LookupDispatcher
     {
+        public event Action Connected;
+        public event Action Disconnected;
+
         private readonly SemaphoreSlim _semaphoreSlim;
         private readonly List<SocketClient> _socketClients;
-        private readonly Queue<SocketClient> _socketClientsAvailable;
+        private readonly HashSet<SocketClient> _connectedSocketClients;
+        private readonly Queue<SocketClient> _availableSocketClients;
         private readonly string _protocol;
         private readonly IRequestFormatter _requestFormatter;
 
@@ -19,18 +23,20 @@ namespace IQFeed.CSharpApiClient.Lookup
         {
             _protocol = protocol;
             _semaphoreSlim = new SemaphoreSlim(0, numberOfClients);
-            _socketClients = new List<SocketClient>(GetSocketClients(host, port, bufferSize, numberOfClients));
-            _socketClientsAvailable = new Queue<SocketClient>();
+            _socketClients = new List<SocketClient>(CreateSocketClients(host, port, bufferSize, numberOfClients));
+            _availableSocketClients = new Queue<SocketClient>();
+            _connectedSocketClients = new HashSet<SocketClient>();
             _requestFormatter = requestFormatter;
         }
 
-        private IEnumerable<SocketClient> GetSocketClients(string host, int port, int bufferSize, int numberOfClients)
+        private IEnumerable<SocketClient> CreateSocketClients(string host, int port, int bufferSize, int numberOfClients)
         {
             for (var i = 0; i < numberOfClients; i++)
             {
                 var socketClient = new SocketClient(host, port, bufferSize);
                 socketClient.MessageReceived += OnMessageReceived;
                 socketClient.Connected += OnConnected;
+                socketClient.Disconnected += OnDisconnected;
                 yield return socketClient;
             }
         }
@@ -54,17 +60,17 @@ namespace IQFeed.CSharpApiClient.Lookup
         public async Task<SocketClient> TakeAsync()
         {
             await _semaphoreSlim.WaitAsync();
-            lock (_socketClientsAvailable)
+            lock (_availableSocketClients)
             {
-                return _socketClientsAvailable.Dequeue();
+                return _availableSocketClients.Dequeue();
             }
         }
 
         public void Add(SocketClient socketClient)
         {
-            lock (_socketClientsAvailable)
+            lock (_availableSocketClients)
             {
-                _socketClientsAvailable.Enqueue(socketClient);
+                _availableSocketClients.Enqueue(socketClient);
             }
             _semaphoreSlim.Release();
         }
@@ -73,7 +79,19 @@ namespace IQFeed.CSharpApiClient.Lookup
         {
             var socketClient = (SocketClient)sender;
             socketClient.Send(_requestFormatter.SetProtocol(_protocol));
-            socketClient.Connected -= OnConnected;
+            _connectedSocketClients.Add(socketClient);
+
+            if (_connectedSocketClients.Count == _socketClients.Count)
+                Connected?.Invoke();
+        }
+
+        private void OnDisconnected(object sender, EventArgs eventArgs)
+        {
+            var socketClient = (SocketClient)sender;
+            _connectedSocketClients.Remove(socketClient);
+
+            if (_connectedSocketClients.Count == _socketClients.Count - 1)
+                Disconnected?.Invoke();
         }
 
         private void OnMessageReceived(object sender, SocketMessageEventArgs socketMessageEventArgs)

@@ -7,6 +7,9 @@ namespace IQFeed.CSharpApiClient.Streaming.Derivative
 {
     public class DerivativeClient : IDerivativeClient
     {
+        public event Action Connected;
+        public event Action Disconnected;
+
         public event Action<ErrorMessage> Error
         {
             add => _derivativeMessageHandler.Error += value;
@@ -43,18 +46,7 @@ namespace IQFeed.CSharpApiClient.Streaming.Derivative
 
             _socketClient.MessageReceived += SocketClientOnMessageReceived;
             _socketClient.Connected += SocketClientOnConnected;
-        }
-
-        private void SocketClientOnConnected(object sender, EventArgs e)
-        {
-            var socketClient = (SocketClient)sender;
-            socketClient.Send(_derivativeRequestFormatter.SetProtocol(IQFeedDefault.ProtocolVersion));
-            socketClient.Connected -= SocketClientOnConnected;
-        }
-
-        private void SocketClientOnMessageReceived(object sender, SocketMessageEventArgs e)
-        {
-            _derivativeMessageHandler.ProcessMessages(e.Message, e.Count);
+            _socketClient.Disconnected += SocketClientOnDisconnected;
         }
 
         public void Connect()
@@ -96,6 +88,23 @@ namespace IQFeed.CSharpApiClient.Streaming.Derivative
         {
             var request = _derivativeRequestFormatter.UnwatchAll();
             _socketClient.Send(request);
+        }
+
+        private void SocketClientOnMessageReceived(object sender, SocketMessageEventArgs e)
+        {
+            _derivativeMessageHandler.ProcessMessages(e.Message, e.Count);
+        }
+
+        private void SocketClientOnConnected(object sender, EventArgs e)
+        {
+            var socketClient = (SocketClient)sender;
+            socketClient.Send(_derivativeRequestFormatter.SetProtocol(IQFeedDefault.ProtocolVersion));
+            Connected?.Invoke();
+        }
+
+        private void SocketClientOnDisconnected(object sender, EventArgs e)
+        {
+            Disconnected?.Invoke();
         }
     }
 }

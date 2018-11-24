@@ -9,6 +9,9 @@ namespace IQFeed.CSharpApiClient.Streaming.Level1
 {
     public class Level1Client : ILevel1Client
     {
+        public event Action Connected;
+        public event Action Disconnected;
+
         public event Action<FundamentalMessage> Fundamental
         {
             add => _level1MessageHandler.Fundamental += value;
@@ -60,12 +63,18 @@ namespace IQFeed.CSharpApiClient.Streaming.Level1
         private readonly Level1MessageHandler _level1MessageHandler;
         private readonly ILevel1Snapshot _level1Snapshot;
 
-        public Level1Client(SocketClient socketClient, Level1RequestFormatter level1RequestFormatter, Level1MessageHandler level1MessageHandler, ILevel1Snapshot level1Snapshot)
+        public Level1Client(
+            SocketClient socketClient, 
+            Level1RequestFormatter level1RequestFormatter, 
+            Level1MessageHandler level1MessageHandler, 
+            ILevel1Snapshot level1Snapshot)
         {
             _level1Snapshot = level1Snapshot;
             _socketClient = socketClient;
             _socketClient.MessageReceived += SocketClientOnMessageReceived;
+
             _socketClient.Connected += SocketClientOnConnected;
+            _socketClient.Disconnected += SocketClientOnDisconnected;
 
             _level1RequestFormatter = level1RequestFormatter;
             _level1MessageHandler = level1MessageHandler;
@@ -214,7 +223,12 @@ namespace IQFeed.CSharpApiClient.Streaming.Level1
         {
             var socketClient = (SocketClient)sender;
             socketClient.Send(_level1RequestFormatter.SetProtocol(IQFeedDefault.ProtocolVersion));
-            socketClient.Connected -= SocketClientOnConnected;
+            Connected?.Invoke();
+        }
+
+        private void SocketClientOnDisconnected(object sender, EventArgs eventArgs)
+        {
+            Disconnected?.Invoke();
         }
     }
 }

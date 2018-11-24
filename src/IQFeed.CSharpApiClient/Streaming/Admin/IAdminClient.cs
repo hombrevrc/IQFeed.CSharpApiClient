@@ -1,5 +1,4 @@
-﻿using IQFeed.CSharpApiClient.Common;
-using IQFeed.CSharpApiClient.Common.Interfaces;
+﻿using IQFeed.CSharpApiClient.Common.Interfaces;
 
 namespace IQFeed.CSharpApiClient.Streaming.Admin
 {

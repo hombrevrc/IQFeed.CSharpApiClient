@@ -8,8 +8,9 @@ namespace IQFeed.CSharpApiClient.Socket
 {
     public class SocketClient : IDisposable
     {
-        public event EventHandler<SocketMessageEventArgs> MessageReceived;
         public event EventHandler Connected;
+        public event EventHandler Disconnected;
+        public event EventHandler<SocketMessageEventArgs> MessageReceived;
 
         private bool _disposed;
         private readonly IPEndPoint _hostEndPoint;
@@ -58,7 +59,10 @@ namespace IQFeed.CSharpApiClient.Socket
             }
         }
 
-        public void Disconnect() { Dispose(); }
+        public void Disconnect()
+        {
+            Dispose();
+        }
 
         public void Send(string message)
         {
@@ -88,6 +92,9 @@ namespace IQFeed.CSharpApiClient.Socket
                     break;
                 case SocketAsyncOperation.Send:
                     ProcessSend(e);
+                    break;
+                case SocketAsyncOperation.Disconnect:
+                    ProcessDisconnect(e);
                     break;
                 default:
                     throw new ArgumentException("The last operation completed on the socket was not a receive or send");
@@ -123,7 +130,15 @@ namespace IQFeed.CSharpApiClient.Socket
             }
         }
 
-        protected virtual void ProcessSend(SocketAsyncEventArgs e) { throw new NotImplementedException(); }
+        protected virtual void ProcessSend(SocketAsyncEventArgs e)
+        {
+            throw new NotImplementedException();
+        }
+
+        protected virtual void ProcessDisconnect(SocketAsyncEventArgs e)
+        {
+            Disconnected.RaiseEvent(this, EventArgs.Empty);
+        }
 
         #region IDisposable
 
@@ -139,6 +154,7 @@ namespace IQFeed.CSharpApiClient.Socket
             _readEventArgs?.Dispose();
             MessageReceived = null;
             Connected = null;
+            Disconnected = null;
         }
 
         #endregion

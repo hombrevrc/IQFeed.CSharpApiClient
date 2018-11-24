@@ -7,6 +7,8 @@ namespace IQFeed.CSharpApiClient.Streaming.Admin
 {
     public class AdminClient : IAdminClient
     {
+        public event Action Connected;
+        public event Action Disconnected;
         public event Action<ProtocolMessage> Protocol
         {
             add => _adminMessageHandler.Protocol += value;
@@ -57,6 +59,7 @@ namespace IQFeed.CSharpApiClient.Streaming.Admin
             _socketClient = socketClient;
             _socketClient.MessageReceived += SocketClientOnMessageReceived;
             _socketClient.Connected += SocketClientOnConnected;
+            _socketClient.Disconnected += SocketClientOnDisconnected;
 
             _adminRequestFormatter = adminRequestFormatter;
             _adminMessageHandler = adminMessageHandler;
@@ -127,7 +130,7 @@ namespace IQFeed.CSharpApiClient.Streaming.Admin
             var request = _adminRequestFormatter.SetClientStats(on);
             _socketClient.Send(request);
         }
-        
+
         public void Connect()
         {
             _socketClient.Connect();
@@ -142,7 +145,12 @@ namespace IQFeed.CSharpApiClient.Streaming.Admin
         {
             var socketClient = (SocketClient)sender;
             socketClient.Send(_adminRequestFormatter.SetProtocol(IQFeedDefault.ProtocolVersion));
-            socketClient.Connected -= SocketClientOnConnected;
+            Connected?.Invoke();
+        }
+
+        private void SocketClientOnDisconnected(object sender, EventArgs e)
+        {
+            Disconnected?.Invoke();
         }
 
         private void SocketClientOnMessageReceived(object sender, SocketMessageEventArgs e)
